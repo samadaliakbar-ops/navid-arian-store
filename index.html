@@ -1498,12 +1498,19 @@
   }
 
   async function pushProductsToCloud() {
-    if (!sbClient) return;
+    if (!sbClient) { console.warn('Supabase client not initialized'); return; }
     try {
       const rows = state.products.map(productToRow);
       if (!rows.length) return;
-      await sbClient.from('products').upsert(rows, { onConflict: 'id' });
-    } catch (e) { /* offline — local copy already saved, will retry next load */ }
+      const { error } = await sbClient.from('products').upsert(rows, { onConflict: 'id' });
+      if (error) {
+        console.error('Supabase upsert error:', error);
+        toast(t('همگام‌سازی با سرور ناموفق بود: ' + (error.message || ''), 'Cloud sync failed: ' + (error.message || '')));
+      }
+    } catch (e) {
+      console.error('Supabase push exception:', e);
+      toast(t('خطا در اتصال به سرور ابری.', 'Cloud connection error.'));
+    }
   }
 
   async function deleteProductFromCloud(id) {
