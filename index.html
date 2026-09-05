@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>پخش کالای پزشکی نوید آرین | فروشگاه لوازم پزشکی و ارتوپدی — Navid Arian Medical</title>
 <meta name="description" content="فروشگاه آنلاین کالای پزشکی و ارتوپدی نوید، عرضه‌کننده ویلچر، واکر، بریس‌های طبی و لوازم پزشکی ممتاز. سفارش سریع از طریق واتس‌اپ و ایتا.">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff6b47">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#ff6b47">
 <meta property="og:type" content="website">
@@ -3316,6 +3320,12 @@
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
+  }
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    });
   }
 })();
 </script>
