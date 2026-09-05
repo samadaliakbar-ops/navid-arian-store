@@ -35,6 +35,7 @@
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
 
 <script type="application/ld+json">
@@ -1451,6 +1452,65 @@
     return (digits.match(/.{1,4}/g) || [digits]).join(' - ');
   }
 
+  /* ---------- Supabase sync (products) ---------- */
+  const SUPABASE_URL = 'https://pmweosmflxwjgrfxcmte.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_6n6nXfToBIusxHCt7WS5oQ_LbcKzCjq';
+  const sbClient = (window.supabase && window.supabase.createClient)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+    : null;
+
+  function productToRow(p) {
+    return {
+      id: p.id, name_fa: p.name_fa, name_en: p.name_en || null,
+      price: p.price != null ? String(p.price) : null,
+      weight: p.weight || null, category: p.category || null,
+      description_fa: p.description_fa || null, description_en: p.description_en || null,
+      images: Array.isArray(p.images) ? p.images : [],
+      in_stock: !!p.in_stock
+    };
+  }
+  function rowToProduct(r) {
+    return {
+      id: r.id, name_fa: r.name_fa, name_en: r.name_en,
+      price: r.price, weight: r.weight, category: r.category,
+      description_fa: r.description_fa, description_en: r.description_en,
+      images: Array.isArray(r.images) ? r.images : [],
+      in_stock: !!r.in_stock
+    };
+  }
+
+  async function syncProductsFromCloud() {
+    if (!sbClient) return;
+    try {
+      const { data, error } = await sbClient.from('products').select('*').order('created_at', { ascending: true });
+      if (error || !data) return;
+      if (data.length) {
+        state.products = data.map(rowToProduct);
+      } else {
+        // cloud empty (first run) — push whatever we currently have (seed/local) up
+        await pushProductsToCloud();
+      }
+      try { localStorage.setItem(KEY_PRODUCTS, JSON.stringify(state.products)); } catch {}
+      renderCategoryOptions();
+      renderProductGrid();
+      if (window.lucide) lucide.createIcons();
+    } catch (e) { /* offline or blocked — keep local data silently */ }
+  }
+
+  async function pushProductsToCloud() {
+    if (!sbClient) return;
+    try {
+      const rows = state.products.map(productToRow);
+      if (!rows.length) return;
+      await sbClient.from('products').upsert(rows, { onConflict: 'id' });
+    } catch (e) { /* offline — local copy already saved, will retry next load */ }
+  }
+
+  async function deleteProductFromCloud(id) {
+    if (!sbClient) return;
+    try { await sbClient.from('products').delete().eq('id', id); } catch (e) {}
+  }
+
   /* ---------- persistence ---------- */
   function loadState() {
     try {
@@ -1498,7 +1558,11 @@
   }
 
   function saveProducts() {
-    try { localStorage.setItem(KEY_PRODUCTS, JSON.stringify(state.products)); return true; }
+    try {
+      localStorage.setItem(KEY_PRODUCTS, JSON.stringify(state.products));
+      pushProductsToCloud();
+      return true;
+    }
     catch (err) { reportStorageError(err); return false; }
   }
   function saveSettings() {
@@ -2629,6 +2693,7 @@
       state.products = state.products.filter(x => x.id !== id);
       state.deleteConfirmId = null;
       saveProducts();
+      deleteProductFromCloud(id);
       renderAdminList();
       renderProductGrid();
       renderCategoryOptions();
@@ -3162,6 +3227,7 @@
     refreshCartBadge();
     refreshAccountUI();
     if (window.lucide) lucide.createIcons();
+    syncProductsFromCloud();
   }
 
   if (document.readyState === 'loading') {
